@@ -1,0 +1,28 @@
+name: Periodic Health Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *' # Runs once every 24 hours at midnight UTC
+
+jobs:
+  health_check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Render health endpoint
+        uses: jtalk/url-health-check-action@v4
+        with:
+          url: https://fs-continuous-integration.onrender.com/health
+          max-attempts: 3
+          retry-delay: 15s
+          follow-redirect: true
+
+      - name: Notify Discord if health check failed
+        if: failure()
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: Failure
+          title: 'Production Health Check Failed!'
+          description: 'The periodic health check to `https://fs-continuous-integration.onrender.com/health` failed.'
+          color: 0xff0000
