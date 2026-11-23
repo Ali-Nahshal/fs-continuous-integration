@@ -9,7 +9,7 @@ on:
     types: [opened, synchronize]
 
 jobs:
-  simple_deployment_pipeline:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -20,31 +20,45 @@ jobs:
         run: npm install
       - name: Check style
         run: npm run eslint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install
+      - name: Run unit tests
+        run: npm run test
+
+  e2e_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install dependencies
+        run: npm install
       - name: Build
         run: npm run build
-      - name: Test
-        run: npm run test
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
       - name: Run Playwright tests
         run: npm run test:e2e
+
+  deploy:
+    needs: [lint, test, e2e_test]
+    if: ${{ github.event_name == 'push' && !contains(toJson(github.event.commits), '#skip') && !contains(github.event.head_commit.message, '#skip') }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Trigger deployment
-        if: ${{ github.event_name == 'push' && !contains(toJson(github.event.commits), '#skip') && !contains(github.event.head_commit.message, '#skip') }}
         run: curl ${{ secrets.RENDER_DEPLOY_HOOK }}
-      - name: Notify Discord on failure
-        if: failure()
-        uses: sarisia/actions-status-discord@v1
-        with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK }}
-          status: Failure
-          title: 'Build Failed!'
-          description: |
-            Commit `${{ github.sha }}` by **${{ github.actor }}** failed the pipeline.
-            Message: ${{ github.event.head_commit.message }}
-          color: 0xff0000
 
   tag_release:
-    needs: [simple_deployment_pipeline]
+    needs: [deploy]
     if: ${{ github.event_name == 'push' && !contains(toJson(github.event.commits), '#skip') && !contains(github.event.head_commit.message, '#skip') }}
     runs-on: ubuntu-latest
     permissions:
@@ -58,8 +72,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BUMP: patch
+
+  notify_success:
+    needs: [deploy]
+    if: ${{ github.event_name == 'push' && !contains(toJson(github.event.commits), '#skip') && !contains(github.event.head_commit.message, '#skip') }}
+    runs-on: ubuntu-latest
+    steps:
       - name: Notify Discord on deployment success
-        if: success()
         uses: sarisia/actions-status-discord@v1
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK }}
@@ -67,3 +86,19 @@ jobs:
           title: 'New Version Deployed!'
           description: 'Successfully built, tested, deployed, and tagged commit `${{ github.sha }}`.'
           color: 0x00ff00
+
+  notify_failure:
+    needs: [lint, test, e2e_test, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Discord on failure
+        uses: sarisia/actions-status-discord@v1
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: Failure
+          title: 'Build Failed!'
+          description: |
+            Commit `${{ github.sha }}` by **${{ github.actor }}** failed the pipeline.
+            Message: ${{ github.event.head_commit.message }}
+          color: 0xff0000
