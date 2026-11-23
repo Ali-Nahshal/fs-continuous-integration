@@ -15,3 +15,8 @@ Start by running `npm install` inside the project folder
 ## Deployed Application
 
 [Live Pokédex App on Render](https://fs-continuous-integration.onrender.com)
+
+## Exercise 11.21 — Own CI/CD Pipeline
+
+- [Phonebook CI/CD Repository](https://github.com/Ali-Nahshal/phonebook-cicd)
+- [Live Phonebook App on Render](https://phonebook-cicd-g49t.onrender.com)
